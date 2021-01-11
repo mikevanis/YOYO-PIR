@@ -58,7 +58,7 @@ void handleButtonEvent(AceButton* button, uint8_t eventType, uint8_t buttonState
         case AceButton::kEventPressed:
           break;
         case AceButton::kEventReleased:
-          if (currentSetupStatus == setup_finished) socketIO_sendButtonPress();
+          socketIO_sendButtonPress();
           break;
         case AceButton::kEventLongPressed:
 #ifdef DEV
@@ -69,34 +69,6 @@ void handleButtonEvent(AceButton* button, uint8_t eventType, uint8_t buttonState
           break;
       }
       break;
-  }
-}
-
-
-//reset functions
-void factoryReset() {
-  Serial.println("factoryReset");
-
-  preferences.begin("scads", false);
-  preferences.clear();
-  preferences.end();
-  currentSetupStatus = setup_pending;
-
-  ESP.restart();
-}
-
-void softReset(int delayMs) {
-  if (isResetting == false) {
-    isResetting = true;
-    resetTime = millis() + delayMs;
-  }
-}
-
-void checkReset() {
-  if (isResetting) {
-    if (millis() > resetTime + resetDurationMs) {
-      ESP.restart();
-    }
   }
 }
 
