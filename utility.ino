@@ -81,6 +81,14 @@ String generateID() {
   return  out;
 }
 
+String generateID(uint64_t chipID) {
+  //https://github.com/espressif/arduino-esp32/issues/3859#issuecomment-689171490
+  uint32_t low = chipID % 0xFFFFFFFF;
+  uint32_t high = (chipID >> 32) % 0xFFFFFFFF;
+  String out = String(low);
+  return  out;
+}
+
 long checkSensLength() {
   if (digitalRead(SENS_3) == 0 && digitalRead(SENS_1) == 1) {
     Serial.println("On time is 3 seconds");

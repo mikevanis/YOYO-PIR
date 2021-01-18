@@ -13,8 +13,7 @@ SocketIoClient socketIO;
 #define LED_BUILTIN_ON HIGH
 int BUTTON_BUILTIN =  0;
 
-String myID = "";
-String remoteID = "";
+String myId = "";
 
 //PIR variables
 int PIR_sensitivity;
@@ -51,19 +50,24 @@ char host[] = "irs-socket-server-staging.herokuapp.com"; // Socket.IO Staging Se
 int port = 80; // Socket.IO Port Address
 char path[] = "/socket.io/?transport=websocket"; // Socket.IO Base Path
 
+uint8_t prevWifiStatus;
+
 void setup() {
   Serial.begin(115200);
 
-  myID = generateID();
+  myId = generateID();
 
   settings = new YoYoSettings(512); //Settings must be created here in Setup() as contains call to EEPROM.begin() which will otherwise fail
   wifiManager.init(settings, onceConnected, onYoYoCommandGET, onYoYoCommandPOST, true);
 
-  remoteID = (*settings)["remoteID"].as<String>();
-  if (remoteID.length())
-    wifiManager.begin("YoYoMachines", "blinkblink", true);
-  else
+  if ((*settings)["ids"].size() < 2) {
+    Serial.println("YoYo unpaired. Starting captive portal...");
     wifiManager.begin("YoYoMachines", "blinkblink", false);
+  }
+  else
+    Serial.print("YoYo paired.");
+    serializeJson((*settings)["ids"], Serial);
+    wifiManager.begin("YoYoMachines", "blinkblink", true);
 }
 
 void onceConnected() {
@@ -73,66 +77,98 @@ void onceConnected() {
 void loop() {
   uint8_t wifiStatus = wifiManager.loop();
 
-  switch(wifiStatus) {
-    case YY_NO_SHIELD:
-      break;
-    case YY_IDLE_STATUS:
-      break;
-    case YY_NO_SSID_AVAIL:
-      break;
-    case YY_SCAN_COMPLETED:
-      break;
-    case YY_CONNECTED:
-      socketIO.loop();
-      ledHandler();
-      pirHandler();
-      fanHandler();
-      buttonBuiltIn.check();
-      break;
-    case YY_CONNECT_FAILED:
-      break;
-    case YY_CONNECTION_LOST:
-      break;
-    case YY_DISCONNECTED:
-      break;
-    case YY_CONNECTED_PEER_CLIENT:
-      break;
-    case YY_CONNECTED_PEER_SERVER:
-      break;
+  if (wifiStatus == YY_CONNECTED) {
+    socketIO.loop();
+    ledHandler();
+    pirHandler();
+    fanHandler();
+    buttonBuiltIn.check();
   }
+
+  if (wifiStatus != prevWifiStatus) {
+    if (wifiStatus == YY_CONNECTED_PEER_CLIENT) {
+      // Post my yoyo code to the server and get its yoyo code.
+      Serial.println("Sending my id to the server");
+      DynamicJsonDocument jsonDoc(64);
+      jsonDoc["id"] = myId;
+      wifiManager.POST(WiFi.gatewayIP().toString().c_str(), "/yoyo/id", jsonDoc.to<JsonVariant>());
+      wifiManager.GET(WiFi.gatewayIP().toString().c_str(), "/yoyo/id", jsonDoc);
+      addIdsToSettings(myId, jsonDoc["id"]);
+      (*settings).save();
+    }
+  }
+  prevWifiStatus = wifiStatus;
 }
 
 bool onYoYoCommandGET(const String &url, JsonVariant json) {
   bool success = false;
 
-  Serial.println("onYoYoCommandGET " + url);
+  // TODO get yoyo scan!
   
-  if(url.equals("/yoyo/settings") && settings) {
+  Serial.println("onYoYoCommandGET " + url);
+
+  if (url.equals("/yoyo/settings") && settings) {
+    Serial.println("Requested settings.");
     success = true;
     json.set(*settings);
   }
+  else if (url.equals("/yoyo/id")) {
+    Serial.println("Requested ID.");
+    json["id"] = myId;
+    success = true;
+  }
 
-  return(success);
+  return (success);
 }
 
 bool onYoYoCommandPOST(const String &url, JsonVariant json) {
   bool success = false;
-  
+
   Serial.println("onYoYoCommandPOST " + url);
   serializeJson(json, Serial);
+  Serial.println("");
 
-  //define an alternative to using the built-in /yoyo/credentials endpoint that also allows custom value to be set in the settings doc
-  if(url.equals("/yoyo/settings")) {
-    (*settings)["remoteID"] = json["remoteID"];
-    
+  if (url.equals("/yoyo/settings")) {
+
     success = wifiManager.setCredentials(json);
-    if(success) {
+    if (success) {
+      // Forward POST to other clients
       wifiManager.broadcastToPeersPOST(url, json);
       wifiManager.connect();
     }
-    
     (*settings).save();
+    addIdsToSettings(json["ids"][0], json["ids"][1]);
+    (*settings).save();
+    Serial.println("");
+    Serial.println("Settings after saving twice: ");
+    serializeJson((*settings), Serial);
+  }
+  else if (url.equals("/yoyo/id") && settings) {
+    Serial.println("Got remote id from client");
+    addIdsToSettings(myId, json["id"]);
+    (*settings).save();
+    success = true;
   }
 
-  return(success);
+  return (success);
+}
+
+void addIdsToSettings(String myId, String remoteId) {
+  JsonArray ids = (*settings).createNestedArray("ids");
+  if (myId != "")
+    ids.add(myId);
+  if (remoteId != "")
+    ids.add(remoteId);
+  Serial.println("Saved IDs to settings.");
+}
+
+String getRemoteId() {
+  String id = "";
+  for(int i=0; i<(*settings)["ids"].size(); i++) {
+    if ((*settings)["ids"][i] != myId) {
+      id = (*settings)["ids"][i].as<String>();
+      break;
+    }
+  }
+  return id;
 }

@@ -6,7 +6,7 @@ function init() {
     $('#networks-list-select').attr('disabled', true);
     $('#local_pass').attr('disabled', true);
 
-    $.getJSON('/credentials', function (json) {
+    $.getJSON('/yoyo/settings', function (json) {
         $('#config').show();
         configure(json);
     });
@@ -18,18 +18,23 @@ function configure(json) {
     $('#save-button').click(onSaveButtonClicked);
     $('#local_pass').keypress(onKeyPressed);
 
-    //$('#local-scad-code').text(formatScadCode(json.local_mac));
-    $('[id="local-scad-code"]').text(formatScadCode(json.local_mac));
-    if (json.remote_mac != "") {
-        $('#remote-scad-code').text(formatScadCode(json.remote_mac));
+    // Set device ID
+    $.getJSON('/yoyo/id', function (json) {
+      $('[id="local-scad-code"]').text(formatScadCode(json.id));
+    });
+
+    if (json.ids) {
+        $('#remote-scad-code').text(formatScadCode(json.ids[1]));
         $('#remote-scad-code-input').hide();
+        $('#remote-scad-code-input').val(json.ids[1]);
+        configureDisplay('localSetup');
     } else {
         $('#remote-scad-text').hide();
+        $('#remoteWifiForm').show();
+        $('#remoteMacForm').show();
     }
 
-    configureDisplay(json.local_paired_status);
-
-    populateNetworksList(json.local_ssid);
+    populateNetworksList(json.ssid);
     //TODO: use the password length to display
 }
 
@@ -69,7 +74,8 @@ function onKeyPressed(event) {
 function populateNetworksList(selectedNetwork) {
     let networks = $('#networks-list-select');
 
-    $.getJSON('/scan', function (json) {
+    $.getJSON('/yoyo/networks', function (json) {
+        console.log(json);
         networks.empty();
         $.each(json, function (key, entry) {
             let network = $('<option></option>');
@@ -87,13 +93,16 @@ function populateNetworksList(selectedNetwork) {
 
 function onSaveButtonClicked(event) {
     event.preventDefault();
+    var ids = [];
+    ids.push($('#local-scad-code').text().replace(/\s/g,''));
+    ids.push($('#remote-scad-code-input').val().replace(/\s/g,''));
 
     var data = {
-        local_ssid: $('#networks-list-select').children("option:selected").val(),
-        local_pass: $('#local_pass').val(),
-        remote_mac: $('#remote-scad-code-input').val().replace(/\s/g,''),
+        ssid: $('#networks-list-select').children("option:selected").val(),
+        password: $('#local_pass').val(),
+        ids: ids,
         remote_ssid: $('#remote_ssid').val(),
-        remote_pass: $('#remote_pass').val()
+        remote_password: $('#remote_pass').val()
     };
 
     if ($('#remoteMacForm').is(":visible") && data.remote_mac == "") {
@@ -108,7 +117,7 @@ function onSaveButtonClicked(event) {
     //NB dataType is 'text' otherwise json validation fails on Safari
     $.ajax({
         type: "POST",
-        url: "/credentials",
+        url: "/yoyo/settings",
         data: JSON.stringify(data),
         dataType: 'text',
         contentType: 'application/json; charset=utf-8',
@@ -123,8 +132,7 @@ function onSaveButtonClicked(event) {
             $('#alert-text').addClass('alert-success');
             $('#alert-text').text('Saved');
             $('#nextstep').show();
-
-            reboot(10000);
+            //reboot();
         },
         error: function (jqXHR, textStatus, errorThrown) {
             console.log(jqXHR);

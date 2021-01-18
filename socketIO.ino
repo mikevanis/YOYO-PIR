@@ -8,7 +8,7 @@ void socketIO_sendMac(const char * payload, size_t length) {
   Serial.println("GOT MAC REQUEST");
   const size_t capacity = JSON_OBJECT_SIZE(1) + 50;
   DynamicJsonDocument doc(capacity);
-  doc["macAddress"] = myID;
+  doc["macAddress"] = myId;
   String bodyReq;
   serializeJson(doc, bodyReq);
   Serial.println(bodyReq);
@@ -49,7 +49,7 @@ void socketIO_sendButtonPress() {
   Serial.println("button send");
   const size_t capacity = 2 * JSON_OBJECT_SIZE(2);
   DynamicJsonDocument doc(capacity);
-  doc["macAddress"] = remoteID;
+  doc["macAddress"] = getRemoteId();
   JsonObject data = doc.createNestedObject("data");
   data["project"] = "test";
   String sender;
@@ -61,7 +61,7 @@ void socketIO_sendPir() {
   Serial.println("PIR trigger");
   const size_t capacity = 3 * JSON_OBJECT_SIZE(2);
   DynamicJsonDocument doc(capacity);
-  doc["macAddress"] = remoteID;
+  doc["macAddress"] = getRemoteId();
   JsonObject data = doc.createNestedObject("data");
   data["project"] = "pirFan";
   data["pir"] = String(true);
