@@ -3,6 +3,8 @@
 #include <AceButton.h>
 using namespace ace_button;
 
+#define DEV
+
 YoYoWiFiManager wifiManager;
 YoYoSettings *settings;
 
@@ -64,10 +66,13 @@ void setup() {
     Serial.println("YoYo unpaired. Starting captive portal...");
     wifiManager.begin("YoYoMachines", "blinkblink", false);
   }
-  else
+  else {
     Serial.print("YoYo paired.");
     serializeJson((*settings)["ids"], Serial);
     wifiManager.begin("YoYoMachines", "blinkblink", true);
+  }
+  
+  setupPins();
 }
 
 void onceConnected() {
@@ -82,7 +87,6 @@ void loop() {
     ledHandler();
     pirHandler();
     fanHandler();
-    buttonBuiltIn.check();
   }
 
   if (wifiStatus != prevWifiStatus) {
@@ -91,12 +95,19 @@ void loop() {
       Serial.println("Sending my id to the server");
       DynamicJsonDocument jsonDoc(64);
       jsonDoc["id"] = myId;
-      wifiManager.POST(WiFi.gatewayIP().toString().c_str(), "/yoyo/id", jsonDoc.to<JsonVariant>());
+      serializeJson(jsonDoc, Serial);
+      wifiManager.POST(WiFi.gatewayIP().toString().c_str(), "/yoyo/id", jsonDoc.as<JsonVariant>());
+      jsonDoc.clear();
       wifiManager.GET(WiFi.gatewayIP().toString().c_str(), "/yoyo/id", jsonDoc);
-      addIdsToSettings(myId, jsonDoc["id"]);
-      (*settings).save();
+      if (jsonDoc["id"]) {
+        addIdsToSettings(myId, jsonDoc["id"]);
+        (*settings).save();
+      }
     }
   }
+  
+  buttonBuiltIn.check();
+  
   prevWifiStatus = wifiStatus;
 }
 
@@ -104,7 +115,7 @@ bool onYoYoCommandGET(const String &url, JsonVariant json) {
   bool success = false;
 
   // TODO get yoyo scan!
-  
+
   Serial.println("onYoYoCommandGET " + url);
 
   if (url.equals("/yoyo/settings") && settings) {
@@ -164,7 +175,7 @@ void addIdsToSettings(String myId, String remoteId) {
 
 String getRemoteId() {
   String id = "";
-  for(int i=0; i<(*settings)["ids"].size(); i++) {
+  for (int i = 0; i < (*settings)["ids"].size(); i++) {
     if ((*settings)["ids"][i] != myId) {
       id = (*settings)["ids"][i].as<String>();
       break;

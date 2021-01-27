@@ -61,6 +61,7 @@ void handleButtonEvent(AceButton* button, uint8_t eventType, uint8_t buttonState
           socketIO_sendButtonPress();
           break;
         case AceButton::kEventLongPressed:
+          Serial.println("Long press");
 #ifdef DEV
           factoryReset();
 #endif
@@ -103,4 +104,11 @@ long checkSensLength() {
     Serial.println("On time is 10 seconds");
     return 10000;
   }
+}
+
+void factoryReset() {
+  Serial.println("*******Factory reset!");
+  (*settings).clear();
+  (*settings).save();
+  ESP.restart();
 }
