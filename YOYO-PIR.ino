@@ -71,7 +71,7 @@ void setup() {
     serializeJson((*settings)["ids"], Serial);
     wifiManager.begin("YoYoMachines", "blinkblink", true);
   }
-  
+
   setupPins();
 }
 
@@ -105,58 +105,54 @@ void loop() {
       }
     }
   }
-  
+
   buttonBuiltIn.check();
-  
+
   prevWifiStatus = wifiStatus;
 }
 
-bool onYoYoCommandGET(const String &url, JsonVariant json) {
+bool onYoYoCommandGET(JsonVariant message) {
   bool success = false;
 
-  // TODO get yoyo scan!
+  Serial.println("onYoYoCommandGET " + message["path"].as<String>());
 
-  Serial.println("onYoYoCommandGET " + url);
-
-  if (url.equals("/yoyo/settings") && settings) {
-    Serial.println("Requested settings.");
+  if (message["path"] == "/yoyo/settings" && settings) {
+    Serial.println("GET settings.");
+    message["payload"].set(*settings);
     success = true;
-    json.set(*settings);
   }
-  else if (url.equals("/yoyo/id")) {
-    Serial.println("Requested ID.");
-    json["id"] = myId;
+  else if (message["path"] == "/yoyo/id") {
+    Serial.println("GET id");
+    DynamicJsonDocument jsonDoc(64);
+    jsonDoc["id"] = myId;
+    message["payload"].set(jsonDoc);
     success = true;
   }
 
   return (success);
 }
 
-bool onYoYoCommandPOST(const String &url, JsonVariant json) {
+bool onYoYoCommandPOST(JsonVariant message) {
   bool success = false;
 
-  Serial.println("onYoYoCommandPOST " + url);
-  serializeJson(json, Serial);
-  Serial.println("");
+  Serial.println("onYoYoCommandPOST " + message["path"].as<String>());
+  serializeJson(message, Serial);
+  Serial.println();
 
-  if (url.equals("/yoyo/settings")) {
-
-    success = wifiManager.setCredentials(json);
+  if (message["path"] == "/yoyo/settings" && settings) {
+    Serial.println("POST settings");
+    success = wifiManager.setCredentials(message["payload"]);
     if (success) {
       // Forward POST to other clients
-      wifiManager.broadcastToPeersPOST(url, json);
       wifiManager.connect();
+      message["broadcast"] = true;
     }
+    addIdsToSettings(message["payload"]["ids"][0], message["payload"]["ids"][1]);
     (*settings).save();
-    addIdsToSettings(json["ids"][0], json["ids"][1]);
-    (*settings).save();
-    Serial.println("");
-    Serial.println("Settings after saving twice: ");
-    serializeJson((*settings), Serial);
   }
-  else if (url.equals("/yoyo/id") && settings) {
-    Serial.println("Got remote id from client");
-    addIdsToSettings(myId, json["id"]);
+  else if (message["path"] == "/yoyo/id" && settings) {
+    Serial.println("POST id");
+    addIdsToSettings(myId, message["payload"]["id"]);
     (*settings).save();
     success = true;
   }
