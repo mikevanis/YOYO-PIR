@@ -141,12 +141,21 @@ bool onYoYoCommandPOST(JsonVariant message) {
 
   if (message["path"] == "/yoyo/settings" && settings) {
     Serial.println("POST settings");
+    
     success = wifiManager.setCredentials(message["payload"]);
+    
+    if (message["payload"]["remote_ssid"] && message["payload"]["remote_password"]) {
+      DynamicJsonDocument remoteCredentials(64);
+      remoteCredentials["ssid"] = message["payload"]["remote_ssid"];
+      remoteCredentials["password"] = message["payload"]["remote_password"];
+      success = wifiManager.setCredentials(remoteCredentials);
+    }
+    
     if (success) {
-      // Forward POST to other clients
       wifiManager.connect();
       message["broadcast"] = true;
     }
+    
     addIdsToSettings(message["payload"]["ids"][0], message["payload"]["ids"][1]);
     (*settings).save();
   }
